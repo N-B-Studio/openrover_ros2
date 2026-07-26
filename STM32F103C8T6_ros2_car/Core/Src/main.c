@@ -21,10 +21,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "jc_motor.h"
-
 #include <stdio.h>
 #include <string.h>
+
+#include "jc_motor.h"
+#include "oled.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,7 +45,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan;
-
 I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim2;
@@ -58,86 +58,89 @@ volatile uint32_t app_tick = 0U;
 
 volatile uint8_t uart_rx_byte = 0U;
 
+
 /*
- * Physical motor target.
- *
- * IMPORTANT:
- * These values are JC motor shaft RPM,
- * including motor mounting direction.
+ * ============================================================
+ * MOTOR TARGET
+ * ============================================================
  */
+
 static volatile float left_target_rpm = 0.0f;
 static volatile float right_target_rpm = 0.0f;
 
 
 /*
- * Last valid movement command from UART.
+ * ============================================================
+ * COMMAND WATCHDOG
+ * ============================================================
  */
+
 static volatile uint32_t last_cmd_ms = 0U;
 
-
-/*
- * Watchdog state.
- */
 static volatile uint8_t cmd_watchdog_active = 1U;
 
 
 /*
- * UART line parser.
+ * ============================================================
+ * UART
+ * ============================================================
  */
-#define UART_CMD_BUFFER_SIZE  64U
 
-static char uart_cmd_buffer[UART_CMD_BUFFER_SIZE];
+#define UART_CMD_BUFFER_SIZE    64U
+
+static char uart_cmd_buffer[
+    UART_CMD_BUFFER_SIZE
+];
+
 static volatile uint8_t uart_cmd_index = 0U;
 
 
 /*
- * Robot configuration.
- *
- * Your two motors are mirrored.
- *
- * Current known mapping:
- * Left  forward = positive motor RPM
- * Right forward = negative motor RPM
+ * ============================================================
+ * SYSTEM STATUS
+ * ============================================================
  */
-#define LEFT_FORWARD_SIGN      (+1.0f)
-#define RIGHT_FORWARD_SIGN     (-1.0f)
 
-
-/*
- * Manual W/S/A/D test velocity.
- */
-#define MANUAL_DRIVE_RPM       50.0f
-#define MANUAL_TURN_RPM        40.0f
-
-
-/*
- * Safety timeout.
- *
- * ROS side should eventually send at 20-50 Hz.
- * 300 ms without a valid command => STOP.
- */
-#define COMMAND_TIMEOUT_MS     300U
-
-/*
- * System status.
- */
 static volatile uint8_t can_started = 0U;
+
 static volatile uint8_t uart_command_seen = 0U;
 
 
 /*
- * Formal telemetry rate.
- *
- * 20 ms = 50 Hz
+ * ============================================================
+ * ROCK 5C
+ * ============================================================
  */
-#define TELEMETRY_PERIOD_MS     20U
+
+#define ROCK_TIMEOUT_MS         15000U
+
+static char rock_ip[24] =
+    "192.168.xxx.xxx";
+
+static volatile uint32_t last_rock_ms = 0U;
+
+static volatile uint8_t rock_seen = 0U;
 
 
 /*
- * Motor considered offline if no feedback
- * for this amount of time.
+ * ============================================================
+ * CONFIGURATION
+ * ============================================================
  */
+
+#define LEFT_FORWARD_SIGN       (+1.0f)
+#define RIGHT_FORWARD_SIGN      (-1.0f)
+
+#define MANUAL_DRIVE_RPM        50.0f
+#define MANUAL_TURN_RPM         40.0f
+
+#define COMMAND_TIMEOUT_MS      300U
+
 #define MOTOR_TIMEOUT_MS        100U
+
+#define TELEMETRY_PERIOD_MS     20U
+
+#define OLED_PERIOD_MS          200U
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -375,6 +378,64 @@ static void Robot_HandleSingleCommand(
     }
 }
 
+static void Robot_ParseIpCommand( const char *line)
+{
+    const char *ip;
+
+    if (line == NULL)
+    {
+        return;
+    }
+
+    if (strncmp(
+            line,
+            "IP,",
+            3U) != 0)
+    {
+        return;
+    }
+
+    ip = &line[3];
+
+
+    /*
+     * Reject empty or oversized strings.
+     */
+    size_t length =
+        strlen(ip);
+
+    if ((length == 0U) ||
+        (length >= sizeof(rock_ip)))
+    {
+        return;
+    }
+
+
+    /*
+     * Store IP for OLED.
+     */
+    strncpy(
+        rock_ip,
+        ip,
+        sizeof(rock_ip) - 1U
+    );
+
+    rock_ip[
+        sizeof(rock_ip) - 1U
+    ] = '\0';
+
+
+    /*
+     * IP packet also acts as
+     * Rock 5C heartbeat.
+     */
+    last_rock_ms =
+        HAL_GetTick();
+
+    rock_seen = 1U;
+}
+
+
 
 /*
  * Process one complete UART line.
@@ -387,11 +448,39 @@ static void Robot_ProcessUartLine(
         return;
     }
 
-    if (line[0] == 'V')
+
+    /*
+     * Wheel velocity command.
+     */
+    if (strncmp(
+            line,
+            "V,",
+            2U) == 0)
     {
-        Robot_ParseVelocityCommand(line);
+        Robot_ParseVelocityCommand(
+            line
+        );
+
+        return;
+    }
+
+
+    /*
+     * Rock 5C IP / heartbeat.
+     */
+    if (strncmp(
+            line,
+            "IP,",
+            3U) == 0)
+    {
+        Robot_ParseIpCommand(
+            line
+        );
+
+        return;
     }
 }
+
 
 static void Robot_CheckWatchdog(void)
 {
@@ -556,6 +645,225 @@ static void Robot_SendTelemetry(void)
         20U
     );
 }
+
+static uint8_t Robot_IsRockOnline(void)
+{
+    if (rock_seen == 0U)
+    {
+        return 0U;
+    }
+
+
+    uint32_t age =
+        HAL_GetTick() -
+        last_rock_ms;
+
+
+    if (age >
+        ROCK_TIMEOUT_MS)
+    {
+        return 0U;
+    }
+
+
+    return 1U;
+}
+
+static void Robot_UpdateOLED(void)
+{
+    char line[32];
+
+    uint8_t status =
+        Robot_GetStatus();
+
+    uint8_t can_ok =
+        ((status &
+          (1U << 0)) != 0U);
+
+    uint8_t left_ok =
+        ((status &
+          (1U << 1)) != 0U);
+
+    uint8_t right_ok =
+        ((status &
+          (1U << 2)) != 0U);
+
+    uint8_t ros_ok =
+        ((status &
+          (1U << 3)) != 0U);
+
+    uint8_t rock_ok =
+        Robot_IsRockOnline();
+
+
+    /*
+     * Convert velocity manually
+     * to integer rpm for display.
+     *
+     * OLED is status only.
+     * Full precision remains in FB telemetry.
+     */
+    int left_rpm =
+        (int)motor_left.vel_rpm;
+
+    int right_rpm =
+        (int)motor_right.vel_rpm;
+
+
+    OLED_Clear();
+
+
+    /*
+     * ========================================================
+     * LINE 1
+     * ========================================================
+     */
+
+    OLED_SetCursor(
+        0U,
+        0U
+    );
+
+    OLED_WriteString(
+        "ROS CAR"
+    );
+
+
+    /*
+     * ========================================================
+     * LINE 2
+     * ========================================================
+     */
+
+    snprintf(
+        line,
+        sizeof(line),
+        "IP:%s",
+        rock_ip
+    );
+
+    OLED_SetCursor(
+        0U,
+        10U
+    );
+
+    OLED_WriteString(
+        line
+    );
+
+
+    /*
+     * ========================================================
+     * LINE 3
+     * ========================================================
+     */
+
+    snprintf(
+        line,
+        sizeof(line),
+
+        "ROCK:%s",
+
+        rock_ok ?
+            "OK" :
+            "WAIT"
+    );
+
+    OLED_SetCursor(
+        0U,
+        20U
+    );
+
+    OLED_WriteString(
+        line
+    );
+
+
+    /*
+     * ========================================================
+     * LINE 4
+     * ========================================================
+     */
+
+    snprintf(
+        line,
+        sizeof(line),
+
+        "CAN:%s ROS:%s",
+
+        (can_ok &&
+         left_ok &&
+         right_ok) ?
+            "OK" :
+            "ERR",
+
+        ros_ok ?
+            "OK" :
+            "WAIT"
+    );
+
+    OLED_SetCursor(
+        0U,
+        30U
+    );
+
+    OLED_WriteString(
+        line
+    );
+
+
+    /*
+     * ========================================================
+     * LINE 5
+     * ========================================================
+     */
+
+    snprintf(
+        line,
+        sizeof(line),
+
+        "L:%+4d RPM",
+
+        left_rpm
+    );
+
+    OLED_SetCursor(
+        0U,
+        40U
+    );
+
+    OLED_WriteString(
+        line
+    );
+
+
+    /*
+     * ========================================================
+     * LINE 6
+     * ========================================================
+     */
+
+    snprintf(
+        line,
+        sizeof(line),
+
+        "R:%+4d RPM",
+
+        right_rpm
+    );
+
+    OLED_SetCursor(
+        0U,
+        50U
+    );
+
+    OLED_WriteString(
+        line
+    );
+
+
+    OLED_Update();
+}
 /* USER CODE END 0 */
 
 /**
@@ -593,6 +901,68 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  /*
+   * ============================================================
+   * OLED
+   * ============================================================
+   */
+
+  HAL_Delay(100U);
+
+
+  /*
+   * First verify that an I2C device exists.
+   *
+   * OLED expected at 0x3C.
+   */
+  if (HAL_I2C_IsDeviceReady(
+          &hi2c1,
+          OLED_I2C_ADDR,
+          3U,
+          100U) == HAL_OK)
+  {
+      if (OLED_Init(
+              &hi2c1) == HAL_OK)
+      {
+          OLED_Clear();
+
+          OLED_SetCursor(
+              0U,
+              0U
+          );
+
+          OLED_WriteString(
+              "ROS CAR"
+          );
+
+          OLED_SetCursor(
+              0U,
+              15U
+          );
+
+          OLED_WriteString(
+              "STM32 BOOT OK"
+          );
+
+          OLED_SetCursor(
+              0U,
+              30U
+          );
+
+          OLED_WriteString(
+              "WAIT ROCK 5C"
+          );
+
+          OLED_Update();
+      }
+  }
+
+
+  /*
+   * Continue your existing initialization below.
+   */
+
+
   if (HAL_TIM_Base_Start_IT(&htim2) != HAL_OK)
   {
       Error_Handler();
@@ -713,6 +1083,7 @@ int main(void)
   uint32_t last_motor_tick = 0U;
   uint32_t last_telemetry_ms = 0U;
   uint32_t last_debug_ms = 0U;
+  uint32_t last_oled_ms = 0U;
 
   uint32_t last_left_rx_count = 0U;
   uint32_t last_right_rx_count = 0U;
@@ -763,6 +1134,27 @@ int main(void)
               last_telemetry_ms = now;
 
               Robot_SendTelemetry();
+          }
+      }
+
+      /*
+       * ============================================================
+       * OLED STATUS @ 5 Hz
+       * ============================================================
+       */
+
+      {
+          uint32_t now =
+              HAL_GetTick();
+
+          if ((uint32_t)(
+                  now -
+                  last_oled_ms
+              ) >= OLED_PERIOD_MS)
+          {
+              last_oled_ms = now;
+
+              Robot_UpdateOLED();
           }
       }
 

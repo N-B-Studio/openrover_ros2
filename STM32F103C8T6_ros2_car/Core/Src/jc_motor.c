@@ -377,8 +377,18 @@ void JC_ParseFeedback(
         motor->pos_deg =
             (float)position_raw / 100.0f;
 
+        /*
+         * IMPORTANT:
+         *
+         * JC 0x2A fast feedback:
+         * data[4..5] is actual RPM,
+         * NOT rpm * 100.
+         *
+         * Example:
+         * 0x0159 = 345 rpm
+         */
         motor->vel_rpm =
-            (float)velocity_raw / 100.0f;
+            (float)velocity_raw;
 
         motor->rx_count++;
 
