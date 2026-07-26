@@ -17,3 +17,40 @@ CMakeUserPresets.json
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #cmake-build-*
+
+# STM32CubeIDE / STM32 build artifacts
+Debug/
+Release/
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.o
+*.d
+*.su
+*.cyclo
+*.axf
+.settings/
+.metadata/
+
+# ROS 2 build artifacts
+build/
+install/
+log/
+*.colcon
+.colcon
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/

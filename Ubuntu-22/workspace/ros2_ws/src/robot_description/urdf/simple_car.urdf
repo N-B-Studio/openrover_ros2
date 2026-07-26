@@ -1,0 +1,141 @@
+<?xml version="1.0"?>
+
+<robot name="simple_car">
+
+  <!-- ======================= -->
+  <!-- Base Link -->
+  <!-- ======================= -->
+
+  <link name="base_link">
+
+    <visual>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+
+      <geometry>
+        <box size="0.40 0.30 0.10"/>
+      </geometry>
+    </visual>
+
+  </link>
+
+
+  <!-- ======================= -->
+  <!-- Left Wheel -->
+  <!-- ======================= -->
+
+  <link name="left_wheel_link">
+
+    <visual>
+      <geometry>
+        <cylinder radius="0.05" length="0.03"/>
+      </geometry>
+
+      <origin
+        xyz="0 0 0"
+        rpy="1.5708 0 0"
+      />
+
+    </visual>
+
+  </link>
+
+
+  <joint
+    name="left_wheel_joint"
+    type="continuous"
+  >
+
+    <parent link="base_link"/>
+
+    <child link="left_wheel_link"/>
+
+    <origin
+      xyz="0 0.165 0"
+      rpy="0 0 0"
+    />
+
+    <axis xyz="0 1 0"/>
+
+  </joint>
+
+
+  <!-- ======================= -->
+  <!-- Right Wheel -->
+  <!-- ======================= -->
+
+  <link name="right_wheel_link">
+
+    <visual>
+
+      <geometry>
+        <cylinder radius="0.05" length="0.03"/>
+      </geometry>
+
+      <origin
+        xyz="0 0 0"
+        rpy="1.5708 0 0"
+      />
+
+    </visual>
+
+  </link>
+
+
+  <joint
+    name="right_wheel_joint"
+    type="continuous"
+  >
+
+    <parent link="base_link"/>
+
+    <child link="right_wheel_link"/>
+
+    <origin
+      xyz="0 -0.165 0"
+      rpy="0 0 0"
+    />
+
+    <axis xyz="0 1 0"/>
+
+  </joint>
+
+
+  <!-- ======================= -->
+  <!-- Livox Mid-360 -->
+  <!-- ======================= -->
+
+  <link name="livox_frame">
+
+    <visual>
+
+      <geometry>
+        <box size="0.08 0.08 0.06"/>
+      </geometry>
+
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0"
+      />
+
+    </visual>
+
+  </link>
+
+
+  <joint
+    name="livox_joint"
+    type="fixed"
+  >
+
+    <parent link="base_link"/>
+
+    <child link="livox_frame"/>
+
+    <origin
+      xyz="0 0 0.18"
+      rpy="0 0 0"
+    />
+
+  </joint>
+
+</robot>
