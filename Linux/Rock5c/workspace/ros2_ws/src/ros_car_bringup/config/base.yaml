@@ -1,0 +1,17 @@
+base_driver:
+  ros__parameters:
+
+    serial_port: "/dev/ttyS4"
+    baud_rate: 115200
+
+    # Effective values from Lesson 3 calibration.
+    wheel_diameter: 0.06242
+    wheel_separation: 0.12385
+
+    command_rate_hz: 20.0
+    ip_period_s: 5.0
+
+    max_wheel_rpm: 150.0
+
+    # Stop the robot if /cmd_vel disappears.
+    cmd_vel_timeout_s: 0.5

@@ -1,0 +1,139 @@
+<?xml version="1.0"?>
+
+<robot name="ros_car">
+
+  <!-- ========================================================= -->
+  <!-- BASE                                                      -->
+  <!-- ========================================================= -->
+
+  <link name="base_link">
+
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0"/>
+
+      <geometry>
+        <box size="0.180 0.100 0.035"/>
+      </geometry>
+    </visual>
+
+  </link>
+
+
+  <!-- ========================================================= -->
+  <!-- LEFT WHEEL                                                -->
+  <!-- ========================================================= -->
+
+  <link name="left_wheel_link">
+
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="1.57079632679 0 0"/>
+
+      <geometry>
+        <cylinder
+          radius="0.031"
+          length="0.020"/>
+      </geometry>
+    </visual>
+
+  </link>
+
+
+  <joint
+    name="left_wheel_joint"
+    type="continuous">
+
+    <parent link="base_link"/>
+
+    <child link="left_wheel_link"/>
+
+    <origin
+      xyz="0 0.061 0"
+      rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+  </joint>
+
+
+  <!-- ========================================================= -->
+  <!-- RIGHT WHEEL                                               -->
+  <!-- ========================================================= -->
+
+  <link name="right_wheel_link">
+
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="1.57079632679 0 0"/>
+
+      <geometry>
+        <cylinder
+          radius="0.031"
+          length="0.020"/>
+      </geometry>
+    </visual>
+
+  </link>
+
+
+  <joint
+    name="right_wheel_joint"
+    type="continuous">
+
+    <parent link="base_link"/>
+
+    <child link="right_wheel_link"/>
+
+    <origin
+      xyz="0 -0.061 0"
+      rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+  </joint>
+
+
+  <!-- ========================================================= -->
+  <!-- LIDAR PLACEHOLDER                                         -->
+  <!-- ========================================================= -->
+
+  <link name="lidar_link"/>
+
+  <joint
+    name="lidar_joint"
+    type="fixed">
+
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+
+    <origin
+      xyz="0.050 0 0.100"
+      rpy="0 0 0"/>
+
+  </joint>
+
+
+  <!-- ========================================================= -->
+  <!-- CAMERA PLACEHOLDER                                        -->
+  <!-- ========================================================= -->
+
+  <link name="camera_link"/>
+
+  <joint
+    name="camera_joint"
+    type="fixed">
+
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+
+    <origin
+      xyz="0.070 0 0.080"
+      rpy="0 0 0"/>
+
+  </joint>
+
+</robot>

@@ -15,6 +15,8 @@ from geometry_msgs.msg import (
 
 from nav_msgs.msg import Odometry
 
+from sensor_msgs.msg import JointState
+
 from rclpy.node import Node
 
 from tf2_ros import TransformBroadcaster
@@ -155,6 +157,12 @@ class BaseDriver(Node):
                 Odometry,
                 '/odom',
                 20,
+        )
+
+        self.joint_state_pub = self.create_publisher(
+            JointState,
+            '/joint_states',
+            20,
         )
 
         self.tf_broadcaster = (
@@ -476,8 +484,9 @@ class BaseDriver(Node):
             self.status = int(
                 parts[6]
             )
-
+            
             self.update_odometry()
+            self.publish_joint_states()
         except ValueError:
             self.get_logger().warning(
                 f'Invalid FB values: {line}'
@@ -847,6 +856,68 @@ class BaseDriver(Node):
             transform
         )
 
+
+        # ================================================================
+    
+    # Joint State Publisher
+    # ================================================================
+
+    def publish_joint_states(
+        self,
+    ) -> None:
+
+        msg = JointState()
+
+        msg.header.stamp = (
+            self.get_clock()
+            .now()
+            .to_msg()
+        )
+
+        msg.name = [
+            'left_wheel_joint',
+            'right_wheel_joint',
+        ]
+
+        # Motor coordinate -> robot wheel coordinate
+        #
+        # Left forward  = +
+        # Right forward = +
+        #
+        # Raw right motor encoder is mirrored,
+        # therefore the right side is negated.
+
+        msg.position = [
+            math.radians(
+                self.left_pos_deg
+            ),
+
+            math.radians(
+                -self.right_pos_deg
+            ),
+        ]
+
+        # rpm -> rad/s
+
+        msg.velocity = [
+            (
+                self.left_vel_rpm
+                * 2.0
+                * math.pi
+                / 60.0
+            ),
+
+            (
+                -self.right_vel_rpm
+                * 2.0
+                * math.pi
+                / 60.0
+            ),
+        ]
+
+        self.joint_state_pub.publish(
+            msg
+        )
 def main(
     args=None,
 ) -> None:
