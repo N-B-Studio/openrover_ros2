@@ -141,6 +141,8 @@ static volatile uint8_t rock_seen = 0U;
 #define TELEMETRY_PERIOD_MS     20U
 
 #define OLED_PERIOD_MS          200U
+
+#define ROBOT_MAX_WHEEL_RPM  50.0f
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -270,24 +272,24 @@ static void Robot_ParseVelocityCommand(
         /*
          * Safety clamp at UART boundary.
          */
-        if (left_rpm > 150.0f)
+        if (left_rpm > ROBOT_MAX_WHEEL_RPM)
         {
-            left_rpm = 150.0f;
+            left_rpm = ROBOT_MAX_WHEEL_RPM;
         }
 
-        if (left_rpm < -150.0f)
+        if (left_rpm < -ROBOT_MAX_WHEEL_RPM)
         {
-            left_rpm = -150.0f;
+            left_rpm = -ROBOT_MAX_WHEEL_RPM;
         }
 
-        if (right_rpm > 150.0f)
+        if (right_rpm > ROBOT_MAX_WHEEL_RPM)
         {
-            right_rpm = 150.0f;
+            right_rpm = ROBOT_MAX_WHEEL_RPM;
         }
 
-        if (right_rpm < -150.0f)
+        if (right_rpm < -ROBOT_MAX_WHEEL_RPM)
         {
-            right_rpm = -150.0f;
+            right_rpm = -ROBOT_MAX_WHEEL_RPM;
         }
 
         Robot_SetWheelRpm(
@@ -1011,33 +1013,42 @@ int main(void)
   JC_EnterClosedLoop(JC_NODE_RIGHT);
   HAL_Delay(100U);
 
-  /*
-   * Mode 1 = native velocity closed loop.
-   */
-  if (JC_SetMode( JC_NODE_LEFT, 1U) != HAL_OK)
-  {
-      Error_Handler();
-  }
-  HAL_Delay(100U);
+/*
+ * Mode 5 = JC native low-speed high-torque mode.
+ *
+ * This mode uses register 0x0027 rather than
+ * the normal velocity register 0x0021.
+ */
+if (JC_SetMode(
+        JC_NODE_LEFT,
+        JC_MODE_LOW_SPEED_TORQUE) != HAL_OK)
+{
+    Error_Handler();
+}
 
-  if (JC_SetMode( JC_NODE_RIGHT, 1U) != HAL_OK)
-  {
-      Error_Handler();
-  }
-  HAL_Delay(100U);
+HAL_Delay(100U);
+
+if (JC_SetMode(
+        JC_NODE_RIGHT,
+        JC_MODE_LOW_SPEED_TORQUE) != HAL_OK)
+{
+    Error_Handler();
+}
+
+HAL_Delay(100U);
 
   /*
    * Safe startup.
    */
-  (void)JC_SetVelocityRpm(
-      JC_NODE_LEFT,
-      0.0f
-  );
+    (void)JC_SetLowSpeedRpm(
+        JC_NODE_LEFT,
+        0.0f
+    );
 
-  (void)JC_SetVelocityRpm(
-      JC_NODE_RIGHT,
-      0.0f
-  );
+    (void)JC_SetLowSpeedRpm(
+        JC_NODE_RIGHT,
+        0.0f
+    );
 
   Robot_Stop();
 
@@ -1108,12 +1119,12 @@ int main(void)
       {
           last_motor_tick = tick;
 
-          (void)JC_SetVelocityRpm(
+          (void)JC_SetLowSpeedRpm(
               JC_NODE_LEFT,
               left_target_rpm
           );
 
-          (void)JC_SetVelocityRpm(
+          (void)JC_SetLowSpeedRpm(
               JC_NODE_RIGHT,
               right_target_rpm
           );

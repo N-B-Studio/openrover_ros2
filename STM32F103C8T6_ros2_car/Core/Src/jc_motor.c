@@ -332,6 +332,76 @@ HAL_StatusTypeDef JC_SetVelocityRpm(
     );
 }
 
+HAL_StatusTypeDef JC_SetLowSpeedRpm(
+    uint8_t node_id,
+    float velocity_rpm)
+{
+    /*
+     * JC low-speed register:
+     *
+     * Register : 0x0027
+     * Command  : 0x2B
+     * Format   : signed int16
+     * Scale    : rpm * 100
+     *
+     * Example:
+     *
+     * +1.00 rpm
+     * raw = 100 = 0x0064
+     *
+     * CAN:
+     * 2B 00 27 00 00 64 00 00
+     */
+
+    int16_t velocity_raw;
+
+    uint8_t data[8] =
+    {
+        0x2B,
+        0x00,
+        0x27,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00
+    };
+
+    /*
+     * Low-speed command is signed int16 with rpm * 100.
+     *
+     * Protocol representation allows approximately:
+     * -327.68 to +327.67 rpm.
+     *
+     * For this robot, keep a conservative firmware limit.
+     */
+    velocity_rpm = JC_ClampFloat(
+        velocity_rpm,
+        -100.0f,
+        100.0f
+    );
+
+    velocity_raw =
+        (int16_t)(velocity_rpm * 100.0f);
+
+    data[4] =
+        (uint8_t)(
+            ((uint16_t)velocity_raw >> 8) &
+            0xFFU
+        );
+
+    data[5] =
+        (uint8_t)(
+            (uint16_t)velocity_raw &
+            0xFFU
+        );
+
+    return JC_Send8(
+        JC_TxId(node_id),
+        data
+    );
+}
+
 void JC_ParseFeedback(
     uint16_t rx_id,
     const uint8_t *data,
