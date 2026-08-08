@@ -66,6 +66,25 @@ static volatile int8_t motor_direction[2] =
     0,  /* left */
     0   /* right */
 };
+
+typedef struct
+{
+    float rpm;
+    uint16_t duty_permille;
+} MotorCalibrationPoint;
+
+typedef enum
+{
+    MOTOR_STATE_READY = 0,
+    MOTOR_STATE_WAIT_DIRECTION
+} MotorState;
+
+static MotorState motor_state = MOTOR_STATE_READY;
+static int8_t pending_direction[2] = {0, 0};
+static uint16_t pending_duty[2] = {1000U, 1000U};
+static uint32_t direction_change_started_ms = 0U;
+static uint32_t last_motor_command_ms = 0U;
+static uint8_t motor_watchdog_enabled = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,6 +97,8 @@ static void MX_USART1_UART_Init(void);
 static void Motor_ChangeDirectionSafely(
     int8_t left_direction,
     int8_t right_direction);
+static void Motor_SetWheelRPM(float left_rpm, float right_rpm);
+static void Motor_Update(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -103,8 +124,45 @@ static void UART_Print(const char *text)
         (uint16_t)strlen(text),
         HAL_MAX_DELAY);
 }
-#define PWM_PERIOD_COUNTS 6400U
-#define TEST_DUTY_PERMILLE 990U   /* 90.0%，低速测试 */
+#define PWM_PERIOD_COUNTS          6400U
+#define MOTOR_STOP_DUTY_PERMILLE   1000U
+#define MOTOR_MIN_RPM              6.5f
+#define MOTOR_MAX_RPM              30.0f
+#define MOTOR_DIRECTION_DELAY_MS   300U
+#define MOTOR_COMMAND_TIMEOUT_MS   200U
+#define UART_TEST_RPM              15.0f
+
+/*
+ * 架空实测标定数据。数组必须按RPM从小到大排列。
+ * 970是可靠低速边界；980虽然架空可转，但落地可靠性不足，因此不使用。
+ */
+static const MotorCalibrationPoint left_forward_curve[] =
+{
+    { 5.3f, 970U }, { 6.8f, 960U }, { 8.9f, 950U },
+    {14.2f, 925U }, {20.5f, 900U }, {25.9f, 875U },
+    {31.1f, 850U }
+};
+
+static const MotorCalibrationPoint right_forward_curve[] =
+{
+    { 6.4f, 970U }, { 8.5f, 960U }, {10.5f, 950U },
+    {15.9f, 925U }, {21.6f, 900U }, {26.6f, 875U },
+    {31.7f, 850U }
+};
+
+static const MotorCalibrationPoint left_reverse_curve[] =
+{
+    { 5.7f, 970U }, { 7.8f, 960U }, {10.0f, 950U },
+    {15.2f, 925U }, {21.6f, 900U }, {26.9f, 875U },
+    {32.2f, 850U }
+};
+
+static const MotorCalibrationPoint right_reverse_curve[] =
+{
+    { 5.5f, 970U }, { 7.5f, 960U }, { 9.5f, 950U },
+    {14.8f, 925U }, {20.6f, 900U }, {25.6f, 875U },
+    {30.7f, 850U }
+};
 
 static uint32_t Motor_DutyToCompare(uint16_t duty_permille)
 {
@@ -158,41 +216,25 @@ static void Motor_SetBothDutyPermille(uint16_t duty_permille)
         compare);
 }
 
-static void Motor_Stop(void)
+static void Motor_OutputStop(void)
 {
     /*
      * 100% duty：
      * 停止电机，同时解除此前可能触发的<2%保护。
      */
-    Motor_SetBothDutyPermille(1000U);
+    Motor_SetBothDutyPermille(MOTOR_STOP_DUTY_PERMILLE);
 }
 
-
-static void Motor_SetForward(void)
+static void Motor_Stop(void)
 {
-    HAL_GPIO_WritePin(
-        DIR_L_GPIO_Port,
-        DIR_L_Pin,
-        LEFT_FORWARD_LEVEL);
-
-    HAL_GPIO_WritePin(
-        DIR_R_GPIO_Port,
-        DIR_R_Pin,
-        RIGHT_FORWARD_LEVEL);
+    Motor_OutputStop();
+    motor_state = MOTOR_STATE_READY;
+    pending_direction[0] = 0;
+    pending_direction[1] = 0;
+    pending_duty[0] = MOTOR_STOP_DUTY_PERMILLE;
+    pending_duty[1] = MOTOR_STOP_DUTY_PERMILLE;
 }
 
-static void Motor_SetReverse(void)
-{
-    HAL_GPIO_WritePin(
-        DIR_L_GPIO_Port,
-        DIR_L_Pin,
-        LEFT_REVERSE_LEVEL);
-
-    HAL_GPIO_WritePin(
-        DIR_R_GPIO_Port,
-        DIR_R_Pin,
-        RIGHT_REVERSE_LEVEL);
-}
 
 static void Motor_SetDirection(
     int8_t left_direction,
@@ -235,8 +277,176 @@ static void Motor_SetDirection(
             RIGHT_REVERSE_LEVEL);
     }
 
-    motor_direction[0] = left_direction;
-    motor_direction[1] = right_direction;
+    if (left_direction != 0)
+    {
+        motor_direction[0] = left_direction;
+    }
+
+    if (right_direction != 0)
+    {
+        motor_direction[1] = right_direction;
+    }
+}
+
+static uint16_t Motor_InterpolateDuty(
+    float target_rpm,
+    const MotorCalibrationPoint *curve,
+    uint32_t point_count)
+{
+    if (target_rpm <= curve[0].rpm)
+    {
+        return curve[0].duty_permille;
+    }
+
+    for (uint32_t i = 1U; i < point_count; i++)
+    {
+        if (target_rpm <= curve[i].rpm)
+        {
+            float ratio =
+                (target_rpm - curve[i - 1U].rpm) /
+                (curve[i].rpm - curve[i - 1U].rpm);
+            float duty =
+                (float)curve[i - 1U].duty_permille +
+                ratio *
+                ((float)curve[i].duty_permille -
+                 (float)curve[i - 1U].duty_permille);
+
+            return (uint16_t)(duty + 0.5f);
+        }
+    }
+
+    return curve[point_count - 1U].duty_permille;
+}
+
+static uint16_t Motor_RPMToDuty(
+    float rpm,
+    uint8_t is_left)
+{
+    const MotorCalibrationPoint *curve;
+    uint32_t point_count;
+    float magnitude = (rpm < 0.0f) ? -rpm : rpm;
+
+    if (magnitude < MOTOR_MIN_RPM)
+    {
+        magnitude = MOTOR_MIN_RPM;
+    }
+    else if (magnitude > MOTOR_MAX_RPM)
+    {
+        magnitude = MOTOR_MAX_RPM;
+    }
+
+    if (is_left != 0U)
+    {
+        curve = (rpm > 0.0f) ?
+            left_forward_curve : left_reverse_curve;
+        point_count = (rpm > 0.0f) ?
+            (uint32_t)(sizeof(left_forward_curve) /
+                       sizeof(left_forward_curve[0])) :
+            (uint32_t)(sizeof(left_reverse_curve) /
+                       sizeof(left_reverse_curve[0]));
+    }
+    else
+    {
+        curve = (rpm > 0.0f) ?
+            right_forward_curve : right_reverse_curve;
+        point_count = (rpm > 0.0f) ?
+            (uint32_t)(sizeof(right_forward_curve) /
+                       sizeof(right_forward_curve[0])) :
+            (uint32_t)(sizeof(right_reverse_curve) /
+                       sizeof(right_reverse_curve[0]));
+    }
+
+    return Motor_InterpolateDuty(
+        magnitude,
+        curve,
+        point_count);
+}
+
+/*
+ * 未来micro-ROS的/cmd_vel回调只需调用这个接口。
+ * 每次调用都会刷新200 ms命令看门狗。
+ */
+static void Motor_SetWheelRPM(float left_rpm, float right_rpm)
+{
+    int8_t desired_direction[2];
+    uint16_t desired_duty[2];
+
+    last_motor_command_ms = HAL_GetTick();
+    motor_watchdog_enabled = 1U;
+
+    desired_direction[0] =
+        (left_rpm > 0.0f) ? 1 :
+        ((left_rpm < 0.0f) ? -1 : 0);
+    desired_direction[1] =
+        (right_rpm > 0.0f) ? 1 :
+        ((right_rpm < 0.0f) ? -1 : 0);
+
+    desired_duty[0] = (desired_direction[0] == 0) ?
+        MOTOR_STOP_DUTY_PERMILLE :
+        Motor_RPMToDuty(left_rpm, 1U);
+    desired_duty[1] = (desired_direction[1] == 0) ?
+        MOTOR_STOP_DUTY_PERMILLE :
+        Motor_RPMToDuty(right_rpm, 0U);
+
+    if ((desired_direction[0] == 0) &&
+        (desired_direction[1] == 0))
+    {
+        Motor_Stop();
+        return;
+    }
+
+    pending_direction[0] = desired_direction[0];
+    pending_direction[1] = desired_direction[1];
+    pending_duty[0] = desired_duty[0];
+    pending_duty[1] = desired_duty[1];
+
+    if (motor_state == MOTOR_STATE_WAIT_DIRECTION)
+    {
+        return;
+    }
+
+    if (((desired_direction[0] != 0) &&
+         (desired_direction[0] != motor_direction[0])) ||
+        ((desired_direction[1] != 0) &&
+         (desired_direction[1] != motor_direction[1])))
+    {
+        Motor_ChangeDirectionSafely(
+            desired_direction[0],
+            desired_direction[1]);
+        return;
+    }
+
+    Motor_SetDirection(
+        desired_direction[0],
+        desired_direction[1]);
+    Motor_SetLeftDutyPermille(desired_duty[0]);
+    Motor_SetRightDutyPermille(desired_duty[1]);
+}
+
+static void Motor_Update(void)
+{
+    uint32_t now = HAL_GetTick();
+
+    if ((motor_watchdog_enabled != 0U) &&
+        ((now - last_motor_command_ms) > MOTOR_COMMAND_TIMEOUT_MS))
+    {
+        Motor_Stop();
+        motor_watchdog_enabled = 0U;
+        UART_Print("[SAFETY] Motor command timeout -> STOP\r\n");
+        return;
+    }
+
+    if ((motor_state == MOTOR_STATE_WAIT_DIRECTION) &&
+        ((now - direction_change_started_ms) >=
+         MOTOR_DIRECTION_DELAY_MS))
+    {
+        Motor_SetDirection(
+            pending_direction[0],
+            pending_direction[1]);
+        Motor_SetLeftDutyPermille(pending_duty[0]);
+        Motor_SetRightDutyPermille(pending_duty[1]);
+        motor_state = MOTOR_STATE_READY;
+    }
 }
 
 static void FG_TakeSnapshot(uint32_t pulses[WHEEL_COUNT])
@@ -373,17 +583,15 @@ static void Process_UART_Command(void)
     {
         case 'F':
         case 'f':
-            Motor_ChangeDirectionSafely(1, 1);
-            Motor_SetBothDutyPermille(
-                TEST_DUTY_PERMILLE);
+            Motor_SetWheelRPM(UART_TEST_RPM, UART_TEST_RPM);
+            motor_watchdog_enabled = 0U;
             UART_Print("[MOTOR] FORWARD\r\n");
             break;
 
         case 'V':
         case 'v':
-            Motor_ChangeDirectionSafely(-1, -1);
-            Motor_SetBothDutyPermille(
-                TEST_DUTY_PERMILLE);
+            Motor_SetWheelRPM(-UART_TEST_RPM, -UART_TEST_RPM);
+            motor_watchdog_enabled = 0U;
             UART_Print("[MOTOR] REVERSE\r\n");
             break;
 
@@ -393,9 +601,8 @@ static void Process_UART_Command(void)
              * 原地左转：
              * 左侧后退，右侧前进
              */
-            Motor_ChangeDirectionSafely(-1, 1);
-            Motor_SetBothDutyPermille(
-                TEST_DUTY_PERMILLE);
+            Motor_SetWheelRPM(-UART_TEST_RPM, UART_TEST_RPM);
+            motor_watchdog_enabled = 0U;
             UART_Print("[MOTOR] TURN LEFT\r\n");
             break;
 
@@ -405,15 +612,15 @@ static void Process_UART_Command(void)
              * 原地右转：
              * 左侧前进，右侧后退
              */
-            Motor_ChangeDirectionSafely(1, -1);
-            Motor_SetBothDutyPermille(
-                TEST_DUTY_PERMILLE);
+            Motor_SetWheelRPM(UART_TEST_RPM, -UART_TEST_RPM);
+            motor_watchdog_enabled = 0U;
             UART_Print("[MOTOR] TURN RIGHT\r\n");
             break;
 
         case 'S':
         case 's':
             Motor_Stop();
+            motor_watchdog_enabled = 0U;
             UART_Print("[MOTOR] STOP\r\n");
             FG_PrintTotals();
             break;
@@ -447,12 +654,11 @@ static void Motor_ChangeDirectionSafely(
     int8_t left_direction,
     int8_t right_direction)
 {
-    Motor_Stop();
-    HAL_Delay(300U);
-
-    Motor_SetDirection(
-        left_direction,
-        right_direction);
+    pending_direction[0] = left_direction;
+    pending_direction[1] = right_direction;
+    Motor_OutputStop();
+    direction_change_started_ms = HAL_GetTick();
+    motor_state = MOTOR_STATE_WAIT_DIRECTION;
 }
 
 /* USER CODE END 0 */
@@ -493,7 +699,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
 
-  Motor_SetForward();
+  Motor_SetDirection(1, 1);
 
   /* 上电后保持100% duty至少2秒，停止并解除保护 */
   Motor_Stop();
@@ -513,6 +719,7 @@ int main(void)
   while (1)
   {
 	  Process_UART_Command();
+	  Motor_Update();
 
 	 if ((HAL_GetTick() - last_print_ms) >= 500U)
 	 {
