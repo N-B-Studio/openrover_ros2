@@ -54,3 +54,16 @@ build/
 .ruff_cache/
 .venv/
 venv/
+
+Core
+Drivers
+EWARM
+Middlewares
+.mxproject
+Makefile
+*.s
+*.ld
+build
+.vscode
+libmicroros
+custombuild
