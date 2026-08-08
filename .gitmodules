@@ -1,0 +1,4 @@
+[submodule "G431CBU6-Rover/micro_ros_stm32cubemx_utils"]
+	path = G431CBU6-Rover/micro_ros_stm32cubemx_utils
+	url = https://github.com/micro-ROS/micro_ros_stm32cubemx_utils.git
+	branch = jazzy
