@@ -69,14 +69,18 @@ void Error_Handler(void);
 #define DIR_L_GPIO_Port GPIOA
 #define DIR_R_Pin GPIO_PIN_3
 #define DIR_R_GPIO_Port GPIOA
-#define ENCODER_2_Pin GPIO_PIN_4
-#define ENCODER_2_GPIO_Port GPIOA
-#define ENCODER_1_Pin GPIO_PIN_6
-#define ENCODER_1_GPIO_Port GPIOA
-#define ENCODER_3_Pin GPIO_PIN_0
-#define ENCODER_3_GPIO_Port GPIOB
-#define ENCODER_4_Pin GPIO_PIN_1
-#define ENCODER_4_GPIO_Port GPIOB
+#define FG_FL_Pin GPIO_PIN_4
+#define FG_FL_GPIO_Port GPIOA
+#define FG_FL_EXTI_IRQn EXTI4_IRQn
+#define FG_RL_Pin GPIO_PIN_6
+#define FG_RL_GPIO_Port GPIOA
+#define FG_RL_EXTI_IRQn EXTI9_5_IRQn
+#define FG_RR_Pin GPIO_PIN_0
+#define FG_RR_GPIO_Port GPIOB
+#define FG_RR_EXTI_IRQn EXTI0_IRQn
+#define FG_FR_Pin GPIO_PIN_1
+#define FG_FR_GPIO_Port GPIOB
+#define FG_FR_EXTI_IRQn EXTI1_IRQn
 
 /* USER CODE BEGIN Private defines */
 

@@ -76,16 +76,6 @@
 			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_gpio.c</location>
 		</link>
 		<link>
-			<name>Drivers/STM32G4xx_HAL_Driver/stm32g4xx_hal_pcd.c</name>
-			<type>1</type>
-			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_pcd.c</location>
-		</link>
-		<link>
-			<name>Drivers/STM32G4xx_HAL_Driver/stm32g4xx_hal_pcd_ex.c</name>
-			<type>1</type>
-			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_pcd_ex.c</location>
-		</link>
-		<link>
 			<name>Drivers/STM32G4xx_HAL_Driver/stm32g4xx_hal_pwr.c</name>
 			<type>1</type>
 			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_pwr.c</location>
@@ -124,31 +114,6 @@
 			<name>Drivers/STM32G4xx_HAL_Driver/stm32g4xx_hal_uart_ex.c</name>
 			<type>1</type>
 			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_uart_ex.c</location>
-		</link>
-		<link>
-			<name>Drivers/STM32G4xx_HAL_Driver/stm32g4xx_ll_usb.c</name>
-			<type>1</type>
-			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_ll_usb.c</location>
-		</link>
-		<link>
-			<name>Middlewares/USB_Device_Library/usbd_cdc.c</name>
-			<type>1</type>
-			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c</location>
-		</link>
-		<link>
-			<name>Middlewares/USB_Device_Library/usbd_core.c</name>
-			<type>1</type>
-			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_core.c</location>
-		</link>
-		<link>
-			<name>Middlewares/USB_Device_Library/usbd_ctlreq.c</name>
-			<type>1</type>
-			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c</location>
-		</link>
-		<link>
-			<name>Middlewares/USB_Device_Library/usbd_ioreq.c</name>
-			<type>1</type>
-			<location>C:/Users/10504/STM32Cube/Repository/STM32Cube_FW_G4_V1.6.3/Middlewares/ST/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c</location>
 		</link>
 	</linkedResources>
 </projectDescription>
