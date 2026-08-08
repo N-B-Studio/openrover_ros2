@@ -49,8 +49,7 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-static uint32_t pwm_compare = 0U;
-static int32_t pwm_step = 20;
+static uint32_t pwm_L = 680U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,7 +60,6 @@ static void MX_TIM3_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 static void Debug_Print(const char *message);
-static void Set_TestPwm(uint32_t compare);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -81,25 +79,13 @@ static void Debug_Print(const char *message)
      * USB CDC可能在刚插入或PC未打开串口时返回USBD_BUSY，
      * POC阶段可以忽略，不要阻塞主循环。
      */
+    /*
     (void)CDC_Transmit_FS(
         (uint8_t *)message,
         length);
+        */
 }
 
-static void Set_TestPwm(uint32_t compare)
-{
-    uint32_t period = __HAL_TIM_GET_AUTORELOAD(&htim2);
-
-    if (compare > period)
-    {
-        compare = period;
-    }
-
-    __HAL_TIM_SET_COMPARE(
-        &htim2,
-        TIM_CHANNEL_1,
-        compare);
-}
 /* USER CODE END 0 */
 
 /**
@@ -146,8 +132,8 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
 
-  /* 给PC一些USB枚举时间 */
-  HAL_Delay(1500U);
+  /* 电机驱动上电初始化时间 */
+  HAL_Delay(2500U);
 
   Debug_Print(
       "\r\n"
@@ -155,6 +141,13 @@ int main(void)
       "SYSCLK=170MHz\r\n"
       "TIM2_CH1=25kHz dimming PWM\r\n"
       "USART1=115200 8N1\r\n");
+
+
+  /* 左电机先用10%测试，右电机保持停止 */
+  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_L);
+  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwm_L);
+
+  Debug_Print("Motor POC: LEFT=10%, RIGHT=0%\r\n");
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -162,27 +155,6 @@ int main(void)
   while (1)
   {
 	    char message[96];
-
-	    /*
-	     * PA0/TIM2_CH1：
-	     * 0...6799循环，输出25kHz，改变占空比。
-	     */
-	    Set_TestPwm(pwm_compare);
-
-	    pwm_compare =
-	        (uint32_t)((int32_t)pwm_compare + pwm_step);
-
-	    if (pwm_compare >= 6799U)
-	    {
-	        pwm_compare = 6799U;
-	        pwm_step = -20;
-	    }
-	    else if (((int32_t)pwm_compare <= 0) && (pwm_step < 0))
-	    {
-	        pwm_compare = 0U;
-	        pwm_step = 20;
-	    }
-
 	    /*
 	     * PC13板载LED作为heartbeat。
 	     * 很多G431小板的LED是低电平点亮，
@@ -197,7 +169,7 @@ int main(void)
 	        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
 	        uint32_t duty_percent =
-	            (pwm_compare * 100U) / 6799U;
+	            (pwm_L * 100U) / 6799U;
 
 	        snprintf(
 	            message,
