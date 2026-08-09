@@ -30,10 +30,10 @@
 #define WHEEL_STATE_PERIOD_MS        100U
 #define TIME_SYNC_RETRY_MS           10000U
 
-#define FG_PPR_FL                    1121.1f
-#define FG_PPR_RL                    1123.5f
-#define FG_PPR_FR                    1173.4f
-#define FG_PPR_RR                    1174.1f
+#define FG_PPR_FL                    1115.0f
+#define FG_PPR_RL                    1115.0f
+#define FG_PPR_FR                    1075.0f
+#define FG_PPR_RR                    1075.0f
 
 #define LEFT_FORWARD_LEVEL           GPIO_PIN_SET
 #define LEFT_REVERSE_LEVEL           GPIO_PIN_RESET
