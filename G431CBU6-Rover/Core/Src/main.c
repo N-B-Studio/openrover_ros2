@@ -26,7 +26,7 @@
 #define MOTOR_MIN_RPM                6.5f
 #define MOTOR_MAX_RPM                30.0f
 #define MOTOR_DIRECTION_DELAY_MS     300U
-#define MOTOR_COMMAND_TIMEOUT_MS     1000U
+#define MOTOR_COMMAND_TIMEOUT_MS     200U
 #define WHEEL_STATE_PERIOD_MS        100U
 #define TIME_SYNC_RETRY_MS           10000U
 
