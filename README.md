@@ -29,7 +29,8 @@ A compact 2D SLAM and navigation platform designed for learning, development, an
 * Map saving and loading
 * Nav2-based autonomous navigation
 
-[Watch the video](https://youtu.be/SysfDb_uuPQ)
+# [Watch the video](https://youtu.be/SysfDb_uuPQ)
+
 ![OpenRover Light side view](Images/openrover-light-side.jpg)
 
 ---
